@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HexCells Notes</title>
+<style>
+:root{--bg:#f4f5f7;--panel:#fff;--text:#1d2330;--mute:#6b7385;--line:#dde0e7;--acc:#2f7fd8;--hit:#1f6fd1;--miss:#2b2b2e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171c;--panel:#1f2229;--text:#e8eaf0;--mute:#9099ad;--line:#333845;--acc:#5aa2ee;--hit:#3b8ae6;--miss:#0d0d0f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15171c;--panel:#1f2229;--text:#e8eaf0;--mute:#9099ad;--line:#333845;--acc:#5aa2ee;--hit:#3b8ae6;--miss:#0d0d0f;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.app{display:grid;grid-template-columns:290px 1fr;gap:12px;padding:12px;min-height:100vh}
+@media(max-width:800px){.app{grid-template-columns:1fr}}
+.side{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:0 0 8px;display:flex;justify-content:space-between;align-items:center}
+button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:5px 9px;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tools button{padding:9px 4px;font-weight:600}
+.sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.layer{display:flex;align-items:center;gap:5px;padding:5px;border:1px solid transparent;border-radius:8px;cursor:pointer}
+.layer.active{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.layer input[type=text]{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;padding:2px}
+.layer input[type=text]:focus{outline:1px solid var(--acc);border-radius:4px}
+.ic{padding:2px 6px;border:0;background:transparent;color:var(--mute)}
+.ic:hover{color:var(--text)}
+.cnt{color:var(--mute);font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:flex;align-items:center;gap:4px;padding:3px 4px 3px 9px}
+.nudge{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:6px}
+.nudge button{padding:3px 0}
+.small{font-size:12px;color:var(--mute)}
+.main{min-width:0}
+.stage{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:auto;min-height:260px}
+canvas{display:block;width:100%;height:auto;cursor:crosshair}
+.empty{padding:70px 20px;text-align:center;color:var(--mute)}
+.empty b{color:var(--text);font-size:16px}
+label.chk{display:flex;gap:6px;align-items:center;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="app">
+ <div class="side">
+  <div class="card">
+   <h2>Tool <span class="small">keys 1 · 2 · 3</span></h2>
+   <div class="tools">
+    <button id="t-hit" class="on"><span class="sw" style="background:var(--hit)"></span>Hit</button>
+    <button id="t-miss"><span class="sw" style="background:var(--miss);border:1px solid var(--mute)"></span>Miss</button>
+    <button id="t-erase">Erase</button>
+   </div>
+   <label class="chk small"><input type="checkbox" id="hideRev" checked> Only mark unrevealed (orange) cells</label>
+   <div class="small" style="margin-top:6px">Click a cell to mark it. Click again or right-click to clear.</div>
+  </div>
+  <div class="card">
+   <h2>View <span class="small">key V</span></h2>
+   <div class="tools" style="grid-template-columns:1fr 1fr">
+    <button id="m-normal" class="on">Normal</button>
+    <button id="m-compare">Compare</button>
+   </div>
+   <div id="legend" class="small" hidden style="margin-top:8px;line-height:1.9">
+    <div><span class="sw" style="background:#1f6fd1"></span>Hit on every visible layer</div>
+    <div><span class="sw" style="background:#2b2b2e;border:1px solid var(--mute)"></span>Miss on every visible layer</div>
+    <div><span class="sw" style="background:repeating-linear-gradient(135deg,#1f6fd1 0 3px,#2b2b2e 3px 6px)"></span>Hit + miss</div>
+    <div><span class="sw" style="background:repeating-linear-gradient(135deg,#1f6fd1 0 3px,#f2a93b 3px 6px)"></span>Hit + unmarked</div>
+    <div><span class="sw" style="background:repeating-linear-gradient(135deg,#2b2b2e 0 3px,#f2a93b 3px 6px)"></span>Miss + unmarked</div>
+    <div><span class="sw" style="background:repeating-linear-gradient(135deg,#1f6fd1 0 3px,#2b2b2e 3px 6px,#f2a93b 6px 9px)"></span>Hit + miss + unmarked</div>
+   </div>
+  </div>
+  <div class="card">
+   <h2>Layers <button id="addLayer">+ New</button></h2>
+   <div id="layers"></div>
+  </div>
+  <div class="card">
+   <h2>Screenshots <button id="pick">+ Add</button></h2>
+   <input type="file" id="file" accept="image/*" hidden>
+   <div class="chips" id="shots"></div>
+   <div class="small" id="status" style="margin-top:8px"></div>
+   <div class="nudge" id="nudge" hidden></div>
+  </div>
+ </div>
+ <div class="main">
+  <div class="stage" id="stage">
+   <div class="empty" id="empty"><b>Paste a screenshot</b><br>Press Ctrl/⌘+V, drop an image here, or use “+ Add”.<br>Later screenshots of the same puzzle are aligned automatically.</div>
+   <canvas id="cv" hidden></canvas>
+  </div>
+ </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const S3=Math.sqrt(3);
+let shots=[],cur=-1,layers=[],active=0,tool='hit',mode='normal',hover=null,boardKeys=new Set(),uid=1;
+const cv=$('cv'),ctx=cv.getContext('2d');
+
+function addLayer(name,marks){layers.push({id:uid++,name:name||'Layer '+uid,vis:true,marks:marks||{}});active=layers.length-1;renderAll()}
+
+/* ---------- cell detection ---------- */
+function detect(img){
+  const s=Math.min(1,1600/Math.max(img.width,img.height)),W=Math.round(img.width*s),H=Math.round(img.height*s);
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0,W,H);
+  const d=x.getImageData(0,0,W,H).data,cls=new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++){const r=d[i*4],g=d[i*4+1],b=d[i*4+2];
+    cls[i]=(r<110&&g<110&&b<110&&Math.abs(r-b)<35)?1:(b>140&&b-r>50)?2:(r>210&&r-b>45&&r>=g&&g>b)?3:0}
+  const seen=new Uint8Array(W*H),comps=[],st=[];
+  for(let i=0;i<W*H;i++){if(!cls[i]||seen[i])continue;
+    const k=cls[i];let n=0,sx=0,sy=0;st.push(i);seen[i]=1;
+    while(st.length){const p=st.pop(),px=p%W,py=(p/W)|0;n++;sx+=px;sy+=py;
+      for(const q of [px>0?p-1:-1,px<W-1?p+1:-1,py>0?p-W:-1,py<H-1?p+W:-1])
+        if(q>=0&&!seen[q]&&cls[q]===k){seen[q]=1;st.push(q)}}
+    comps.push({n,x:sx/n/s,y:sy/n/s,t:k})}
+  if(!comps.length)return null;
+  const a=comps.map(c=>c.n).sort((p,q)=>q-p),p90=a[Math.floor(a.length*.1)];
+  let cells=comps.filter(c=>c.n>=.25*p90);
+  const med=cells.map(c=>c.n).sort((p,q)=>p-q)[cells.length>>1];
+  cells=cells.filter(c=>c.n>.5*med&&c.n<1.8*med);
+  if(cells.length<4)return null;
+  const nn=cells.map(c=>Math.min(...cells.filter(o=>o!==c).map(o=>Math.hypot(o.x-c.x,o.y-c.y)))).sort((p,q)=>p-q);
+  return fit(cells,nn[nn.length>>1]);
+}
+function ols(xs,ys){const n=xs.length,mx=xs.reduce((a,b)=>a+b)/n,my=ys.reduce((a,b)=>a+b)/n;
+  let sxx=0,sxy=0;for(let i=0;i<n;i++){sxx+=(xs[i]-mx)**2;sxy+=(xs[i]-mx)*(ys[i]-my)}
+  const m=sxx>1e-9?sxy/sxx:null;return m===null?null:[my-m*mx,m]}
+function fit(cells,h){
+  let X0=cells[0].x,Y0=cells[0].y,W=h*S3/2,H=h;
+  for(let pass=0;pass<3;pass++){
+    for(const c of cells){c.q=Math.round((c.x-X0)/W);c.r=Math.round((c.y-Y0)/H-c.q/2)}
+    const fx=ols(cells.map(c=>c.q),cells.map(c=>c.x)),fy=ols(cells.map(c=>c.r+c.q/2),cells.map(c=>c.y));
+    if(fx)[X0,W]=fx;if(fy)[Y0,H]=fy}
+  const cmap=new Map();cells.forEach(c=>cmap.set(c.q+','+c.r,c.t));
+  return{X0,Y0,W,H,cmap};
+}
+function align(g){
+  if(!boardKeys.size)return{q:0,r:0,score:1};
+  const pts=[...g.cmap.keys()].map(k=>k.split(',').map(Number));let best={q:0,r:0,n:-1};
+  for(let dq=-90;dq<=90;dq++)for(let dr=-90;dr<=90;dr++){let n=0;
+    for(const[q,r]of pts)if(boardKeys.has((q+dq)+','+(r+dr)))n++;
+    if(n>best.n)best={q:dq,r:dr,n}}
+  return{q:best.q,r:best.r,score:best.n/pts.length};
+}
+
+/* ---------- screenshots ---------- */
+function addImage(blob){
+  const img=new Image();img.onload=()=>{
+    const g=detect(img);
+    if(!g){alert('Could not find hex cells in that image.');return}
+    const a=align(g);
+    const sh={img,g,off:{q:a.q,r:a.r},score:a.score,name:'Shot '+(shots.length+1)};
+    for(const k of g.cmap.keys()){const[q,r]=k.split(',').map(Number);boardKeys.add((q+sh.off.q)+','+(r+sh.off.r))}
+    shots.push(sh);cur=shots.length-1;if(!layers.length)addLayer('Layer 1');renderAll()};
+  img.src=URL.createObjectURL(blob);
+}
+document.addEventListener('paste',e=>{for(const it of e.clipboardData.items)if(it.type.startsWith('image/')){addImage(it.getAsFile());e.preventDefault();return}});
+$('pick').onclick=()=>$('file').click();
+$('file').onchange=e=>{if(e.target.files[0])addImage(e.target.files[0]);e.target.value=''};
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))addImage(f)});
+
+/* ---------- geometry ---------- */
+const pos=(sh,Q,R)=>{const q=Q-sh.off.q,r=R-sh.off.r,g=sh.g;return[g.X0+g.W*q,g.Y0+g.H*(r+q/2),q,r]};
+const hideRev=()=>$('hideRev').checked;
+function visibleCell(sh,Q,R){const t=sh.g.cmap.get((Q-sh.off.q)+','+(R-sh.off.r));return !(hideRev()&&t&&t!==3)}
+/* a cell can be marked only if it was actually detected in this screenshot (never empty space) */
+function clickable(sh,Q,R){const t=sh.g.cmap.get((Q-sh.off.q)+','+(R-sh.off.r));return t!==undefined&&(!hideRev()||t===3)}
+function hexPath(x,y,rad){ctx.beginPath();for(let i=0;i<6;i++){const a=i*Math.PI/3;ctx[i?'lineTo':'moveTo'](x+rad*Math.cos(a),y+rad*Math.sin(a))}ctx.closePath()}
+function cellAt(px,py){const sh=shots[cur],g=sh.g,q0=Math.round((px-g.X0)/g.W);let b=null,bd=1e9;
+  for(let q=q0-1;q<=q0+1;q++){const r0=Math.round((py-g.Y0)/g.H-q/2);
+    for(let r=r0-1;r<=r0+1;r++){const d=Math.hypot(px-(g.X0+g.W*q),py-(g.Y0+g.H*(r+q/2)));if(d<bd){bd=d;b=[q,r]}}}
+  if(bd>.6*g.H)return null;return[b[0]+sh.off.q,b[1]+sh.off.r];}
+
+/* ---------- drawing ---------- */
+function draw(){
+  const sh=shots[cur];if(!sh)return;
+  cv.width=sh.img.width;cv.height=sh.img.height;ctx.drawImage(sh.img,0,0);
+  const sc=sh.g.H/93,rad=sh.g.H/S3*.62;
+  if(mode==='compare')drawCompare(sh,sc,rad);
+  const order=mode==='compare'?[]:layers.map((l,i)=>i).filter(i=>i!==active).concat(active);
+  for(const i of order){const l=layers[i];if(!l.vis)continue;
+    ctx.globalAlpha=i===active?1:.5;
+    for(const k in l.marks){const[Q,R]=k.split(',').map(Number);if(!visibleCell(sh,Q,R))continue;
+      const[x,y]=pos(sh,Q,R);hexPath(x,y,rad);
+      ctx.fillStyle=l.marks[k]==='hit'?'#1f6fd1':'#2b2b2e';ctx.fill();
+      ctx.lineWidth=3*sc;ctx.strokeStyle='#fff';ctx.stroke();}
+    ctx.globalAlpha=1}
+  if(hover&&clickable(sh,...hover)){const[x,y]=pos(sh,...hover);hexPath(x,y,sh.g.H/S3*.9);ctx.lineWidth=3*sc;ctx.strokeStyle='#e0245e';ctx.stroke()}
+}
+
+function drawCompare(sh,sc,rad){
+  const vis=layers.filter(l=>l.vis),keys=new Set();
+  vis.forEach(l=>Object.keys(l.marks).forEach(k=>keys.add(k)));
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold '+Math.round(rad*.9)+'px system-ui,sans-serif';
+  for(const k of keys){const[Q,R]=k.split(',').map(Number);if(!visibleCell(sh,Q,R))continue;
+    const st=vis.map(l=>l.marks[k]||null),h=st.filter(s=>s==='hit').length,m=st.filter(s=>s==='miss').length,u=st.length-h-m;
+    const cols=[];if(h)cols.push('#1f6fd1');if(m)cols.push('#2b2b2e');if(u)cols.push('#f2a93b');
+    const[x,y]=pos(sh,Q,R);hexPath(x,y,rad);
+    if(cols.length===1){ctx.fillStyle=cols[0];ctx.fill()}
+    else{ctx.save();ctx.clip();ctx.translate(x,y);ctx.rotate(-Math.PI/4);const bw=rad*.38;
+      for(let i=-6;i<=6;i++){ctx.fillStyle=cols[((i%cols.length)+cols.length)%cols.length];ctx.fillRect(i*bw,-rad*2.5,bw+.5,rad*5)}
+      ctx.restore()}
+    hexPath(x,y,rad);ctx.lineWidth=3*sc;ctx.strokeStyle='#fff';ctx.stroke()}
+}
+
+/* ---------- interaction ---------- */
+function point(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]}
+cv.addEventListener('mousemove',e=>{if(cur<0)return;hover=cellAt(...point(e));draw()});
+cv.addEventListener('mouseleave',()=>{hover=null;draw()});
+function applyMark(e,erase){
+  if(cur<0||!layers.length)return;const c=cellAt(...point(e));if(!c||!clickable(shots[cur],...c))return;
+  const k=c.join(','),l=layers[active];
+  if(erase||tool==='erase'||l.marks[k]===tool)delete l.marks[k];else l.marks[k]=tool;
+  if(!l.vis)l.vis=true;renderAll();}
+cv.addEventListener('click',e=>applyMark(e,false));
+cv.addEventListener('contextmenu',e=>{e.preventDefault();applyMark(e,true)});
+function setTool(t){tool=t;for(const x of['hit','miss','erase'])$('t-'+x).classList.toggle('on',x===t)}
+for(const x of['hit','miss','erase'])$('t-'+x).onclick=()=>setTool(x);
+$('hideRev').onchange=draw;
+function setMode(m){mode=m;$('m-normal').classList.toggle('on',m==='normal');$('m-compare').classList.toggle('on',m==='compare');$('legend').hidden=m!=='compare';draw()}
+$('m-normal').onclick=()=>setMode('normal');$('m-compare').onclick=()=>setMode('compare');
+$('addLayer').onclick=()=>addLayer();
+document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.ctrlKey||e.metaKey)return;
+  if(e.key==='1')setTool('hit');else if(e.key==='2')setTool('miss');else if(e.key==='3')setTool('erase');else if(e.key==='n')addLayer();else if(e.key==='v')setMode(mode==='normal'?'compare':'normal')});
+
+/* ---------- panels ---------- */
+function renderLayers(){
+  const box=$('layers');box.innerHTML='';
+  layers.forEach((l,i)=>{
+    const row=document.createElement('div');row.className='layer'+(i===active?' active':'');
+    row.onclick=()=>{active=i;renderAll()};
+    const eye=document.createElement('button');eye.className='ic';eye.textContent=l.vis?'👁':'◌';eye.title='Show/hide';
+    eye.onclick=e=>{e.stopPropagation();l.vis=!l.vis;renderAll()};
+    const nm=document.createElement('input');nm.type='text';nm.value=l.name;
+    nm.oninput=()=>l.name=nm.value;nm.onclick=e=>{e.stopPropagation();if(active!==i){active=i;renderAll()}};
+    const cnt=document.createElement('span');cnt.className='cnt';cnt.textContent=Object.keys(l.marks).length;
+    const dup=document.createElement('button');dup.className='ic';dup.textContent='⧉';dup.title='Duplicate';
+    dup.onclick=e=>{e.stopPropagation();addLayer(l.name+' copy',{...l.marks})};
+    const del=document.createElement('button');del.className='ic';del.textContent='✕';del.title='Delete';
+    del.onclick=e=>{e.stopPropagation();layers.splice(i,1);if(!layers.length)addLayer('Layer 1');active=Math.min(active,layers.length-1);renderAll()};
+    row.append(eye,nm,cnt,dup,del);box.append(row)});
+}
+function renderShots(){
+  const box=$('shots');box.innerHTML='';
+  shots.forEach((s,i)=>{const b=document.createElement('button');b.className='chip'+(i===cur?' on':'');
+    b.append(s.name);const x=document.createElement('span');x.textContent=' ✕';x.className='ic';
+    x.onclick=e=>{e.stopPropagation();shots.splice(i,1);cur=Math.min(cur,shots.length-1);renderAll()};
+    b.append(x);b.onclick=()=>{cur=i;renderAll()};box.append(b)});
+  const sh=shots[cur],st=$('status'),nu=$('nudge');
+  if(!sh){st.textContent='';nu.hidden=true;return}
+  const first=cur===0&&shots.length===1;
+  st.textContent=first?'Reference screenshot. '+sh.g.cmap.size+' cells found.':'Aligned to the board, '+Math.round(sh.score*100)+'% of cells match'+(sh.score<.8?' (low — use the arrows to adjust)':'')+'.';
+  nu.hidden=false;nu.innerHTML='';
+  [['↑',0,-1],['↓',0,1],['↖',-1,0],['↙',-1,1],['↗',1,-1],['↘',1,0]].forEach(([t,dq,dr])=>{
+    const b=document.createElement('button');b.textContent=t;b.title='Shift marks one cell';
+    b.onclick=()=>{sh.off.q-=dq;sh.off.r-=dr;draw()};nu.append(b)});
+}
+function renderAll(){
+  const has=cur>=0;$('empty').hidden=has;cv.hidden=!has;
+  renderLayers();renderShots();if(has)draw();
+}
+renderAll();
+</script>
+</body>
+</html>
