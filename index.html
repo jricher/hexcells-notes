@@ -119,7 +119,33 @@ function detect(img){
   cells=cells.filter(c=>c.n>.5*med&&c.n<1.8*med);
   if(cells.length<4)return null;
   const nn=cells.map(c=>Math.min(...cells.filter(o=>o!==c).map(o=>Math.hypot(o.x-c.x,o.y-c.y)))).sort((p,q)=>p-q);
-  return fit(cells,nn[nn.length>>1]);
+  const grid=fit(cells,nn[nn.length>>1]);probe(grid,d,W,H,s,img.width,img.height);return grid;
+}
+/* Looser classifier used when probing grid positions: also catches washed-out cells under a flower glow
+   (pale cream orange, pale blue, dimmed grey). 1=dark/grey, 2=blue, 3=orange, 0=background. */
+function lcls(r,g,b){
+  if((r<130&&g<130&&b<130)||(r<205&&Math.abs(r-b)<16&&Math.abs(r-g)<16))return 1;
+  if(b-r>=18&&b>200&&b>=g-5)return 2;
+  if(r-b>=18&&r>200&&r>=g-2&&g>=b)return 3;
+  return 0}
+/* Once the lattice is known, sample every lattice position (ring of 6 points between centre text and border)
+   and add any cell the blob pass missed. */
+function probe(gr,d,W,H,s,iw,ih){
+  const cw=gr.W,ch=gr.H,med=a=>(a.sort((p,q)=>p-q),(a[2]+a[3])/2);
+  const q0=Math.floor(-gr.X0/cw)-1,q1=Math.ceil((iw-gr.X0)/cw)+1;
+  for(let q=q0;q<=q1;q++){
+    const r0=Math.floor(-gr.Y0/ch-q/2)-1,r1=Math.ceil((ih-gr.Y0)/ch-q/2)+1;
+    for(let r=r0;r<=r1;r++){
+      const key=q+','+r;if(gr.cmap.has(key))continue;
+      const cx=gr.X0+cw*q,cy=gr.Y0+ch*(r+q/2);
+      if(cx<0||cy<0||cx>=iw||cy>=ih)continue;
+      const R=[],G=[],B=[];let ok=true;
+      for(let k=0;k<6;k++){const a=Math.PI/6+k*Math.PI/3,
+        px=Math.round((cx+.38*ch*Math.cos(a))*s),py=Math.round((cy+.38*ch*Math.sin(a))*s);
+        if(px<0||py<0||px>=W||py>=H){ok=false;break}
+        const i=(py*W+px)*4;R.push(d[i]);G.push(d[i+1]);B.push(d[i+2])}
+      if(!ok)continue;
+      const t=lcls(med(R),med(G),med(B));if(t)gr.cmap.set(key,t)}}
 }
 function ols(xs,ys){const n=xs.length,mx=xs.reduce((a,b)=>a+b)/n,my=ys.reduce((a,b)=>a+b)/n;
   let sxx=0,sxy=0;for(let i=0;i<n;i++){sxx+=(xs[i]-mx)**2;sxy+=(xs[i]-mx)*(ys[i]-my)}
