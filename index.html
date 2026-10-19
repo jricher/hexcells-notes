@@ -53,7 +53,7 @@ label.chk{display:flex;gap:6px;align-items:center;margin-top:8px}
     <button id="t-erase">Erase</button>
    </div>
    <label class="chk small"><input type="checkbox" id="hideRev" checked> Only mark unrevealed (orange) cells</label>
-   <div class="small" style="margin-top:6px">Click a cell to mark it. Click again or right-click to clear.</div>
+   <div class="small" style="margin-top:6px">Click a cell to mark it with the selected tool; click again to clear it. Right-click marks a miss.</div>
   </div>
   <div class="card">
    <h2>View <span class="small">key V</span></h2>
@@ -238,13 +238,14 @@ function drawCompare(sh,sc,rad){
 function point(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]}
 cv.addEventListener('mousemove',e=>{if(cur<0)return;hover=cellAt(...point(e));draw()});
 cv.addEventListener('mouseleave',()=>{hover=null;draw()});
-function applyMark(e,erase){
+function applyMark(e,forced){
   if(cur<0||!layers.length)return;const c=cellAt(...point(e));if(!c||!clickable(shots[cur],...c))return;
   const k=c.join(','),l=layers[active];
-  if(erase||tool==='erase'||l.marks[k]===tool)delete l.marks[k];else l.marks[k]=tool;
+  const T=forced||tool;
+  if(T==='erase'||l.marks[k]===T)delete l.marks[k];else l.marks[k]=T;
   if(!l.vis)l.vis=true;renderAll();}
-cv.addEventListener('click',e=>applyMark(e,false));
-cv.addEventListener('contextmenu',e=>{e.preventDefault();applyMark(e,true)});
+cv.addEventListener('click',e=>applyMark(e));
+cv.addEventListener('contextmenu',e=>{e.preventDefault();applyMark(e,'miss')});
 function setTool(t){tool=t;for(const x of['hit','miss','erase'])$('t-'+x).classList.toggle('on',x===t)}
 for(const x of['hit','miss','erase'])$('t-'+x).onclick=()=>setTool(x);
 $('hideRev').onchange=draw;
