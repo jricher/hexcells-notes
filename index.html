@@ -95,7 +95,7 @@ const S3=Math.sqrt(3);
 let shots=[],cur=-1,layers=[],active=0,tool='hit',mode='normal',hover=null,boardKeys=new Set(),uid=1;
 const cv=$('cv'),ctx=cv.getContext('2d');
 
-function addLayer(name,marks){layers.push({id:uid++,name:name||'Layer '+uid,vis:true,marks:marks||{}});active=layers.length-1;renderAll()}
+function addLayer(name,marks){layers.unshift({id:uid++,name:name||'Layer '+(uid-1),vis:true,marks:marks||{}});active=0;renderAll()}
 
 /* ---------- cell detection ---------- */
 function detect(img){
@@ -203,9 +203,14 @@ function draw(){
   cv.width=sh.img.width;cv.height=sh.img.height;ctx.drawImage(sh.img,0,0);
   const sc=sh.g.H/93,rad=sh.g.H/S3*.62;
   if(mode==='compare')drawCompare(sh,sc,rad);
-  const order=mode==='compare'?[]:layers.map((l,i)=>i).filter(i=>i!==active).concat(active);
-  for(const i of order){const l=layers[i];if(!l.vis)continue;
-    ctx.globalAlpha=i===active?1:.5;
+  let passes=[];
+  if(mode!=='compare'){
+    /* flatten visible inactive layers into one set so identical marks never stack; topmost layer in the list wins on conflicts */
+    const flat={};for(let i=layers.length-1;i>=0;i--)if(i!==active&&layers[i].vis)Object.assign(flat,layers[i].marks);
+    passes=[{marks:flat,a:.5}];
+    if(layers[active]&&layers[active].vis)passes.push({marks:layers[active].marks,a:1})}
+  for(const l of passes){
+    ctx.globalAlpha=l.a;
     for(const k in l.marks){const[Q,R]=k.split(',').map(Number);if(!visibleCell(sh,Q,R))continue;
       const[x,y]=pos(sh,Q,R);hexPath(x,y,rad);
       ctx.fillStyle=l.marks[k]==='hit'?'#1f6fd1':'#2b2b2e';ctx.fill();
@@ -263,7 +268,7 @@ function renderLayers(){
     const dup=document.createElement('button');dup.className='ic';dup.textContent='⧉';dup.title='Duplicate';
     dup.onclick=e=>{e.stopPropagation();addLayer(l.name+' copy',{...l.marks})};
     const del=document.createElement('button');del.className='ic';del.textContent='✕';del.title='Delete';
-    del.onclick=e=>{e.stopPropagation();layers.splice(i,1);if(!layers.length)addLayer('Layer 1');active=Math.min(active,layers.length-1);renderAll()};
+    del.onclick=e=>{e.stopPropagation();layers.splice(i,1);if(i<active)active--;if(!layers.length)addLayer('Layer 1');active=Math.max(0,Math.min(active,layers.length-1));renderAll()};
     row.append(eye,nm,cnt,dup,del);box.append(row)});
 }
 function renderShots(){
